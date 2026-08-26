@@ -22,12 +22,17 @@ certbot/
 nginx/ssl/
 
 # --- datasets: multi-GB, never commit ---
+# data/* (not data/) so the negations below can re-include specific paths --
+# git cannot re-include a file whose parent directory is excluded.
 ingestion/data/
-data/
+data/*
+!data/samples/
+!data/METADATA.md
+!data/MANIFEST.md
 ml-latest*/
 ml-25m/
-title.*.tsv*
-name.basics.tsv*
+data/imdb/title.*.tsv*
+data/imdb/name.basics.tsv*
 *.tsv.gz
 *.csv.gz
 *.zip

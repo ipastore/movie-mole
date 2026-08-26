@@ -1,41 +1,96 @@
 # CLAUDE.md
 
-Guide for working in this repo with Claude Code. Read `PLAN.md` first — it has the goal, architecture, and full phase breakdown. This file is about how to work in the code day to day, not about what to build.
+Guide for working in this repo with Claude Code. **Read `PLAN.md` first** — it holds the goal,
+architecture, measured figures, and phase breakdown. This file is about how to work in the code
+day to day, not what to build.
 
 ## What this project is
 
-A graph-based movie explorer (inspired by ResearchRabbit): navigate from one movie to others connected by director, cast, genre, or taste-based similarity (computed from real ratings), with year/decade filters and a timeline view. Runs self-hosted on your own VPS, with no external API calls in production — all data is loaded once from public datasets (MovieLens, IMDb non-commercial datasets).
+A graph-based movie explorer (inspired by ResearchRabbit): navigate from one movie to others
+connected by similarity, director, cast, or genre, with year/decade filters and a timeline view.
+Similarity comes from the MovieLens **tag genome** — a 1,128-dimension vector per movie that
+GroupLens derived from 330,975 users' ratings and tags. No external API calls in production.
 
 ## Stack
 
-- **Database**: Neo4j Community Edition (Docker)
-- **API**: FastAPI (Python) — see `api/`
-- **Frontend**: Vite + Cytoscape.js — see `frontend/`
-- **Ingestion**: Python scripts in `ingestion/`, run manually, not on every deploy
-- **Deploy**: Docker Compose + nginx, in `docker/`
+- **Database**: Neo4j **AuraDB Free** (hosted). Not self-hosted, not Docker.
+- **API**: **TypeScript on a Cloudflare Worker** — see `api/`. Not FastAPI.
+- **Frontend**: Vite + Cytoscape.js on **Cloudflare Pages** — see `frontend/`
+- **Ingestion**: Python, run by hand from this machine — see `ingestion/`
+- **Deploy**: `wrangler` for the Worker and Pages. **No Docker, no nginx, no VPS.**
+- **Routing**: the Worker mounts at `/api/*` on the Pages domain (same-origin, no CORS preflight)
+
+The cronolix VPS is deliberately not used — it holds unrelated apps and their data.
 
 ## Structure
 
 ```
-ingestion/    scripts that load data into Neo4j (run by hand, once or when refreshing the dataset)
-api/          FastAPI app, exposes the endpoints the frontend uses
-frontend/     SPA with the interactive graph
-docker/       docker-compose.yml and nginx configs
-docs/         additional technical notes, if needed
-PLAN.md       project goal, architecture, and phases — read before touching code
+ingestion/   Python scripts that load Neo4j (run by hand, not on deploy)
+api/         Cloudflare Worker, TypeScript — the endpoints the frontend calls
+frontend/    Vite + Cytoscape.js SPA
+data/        datasets — gitignored except METADATA.md, MANIFEST.md and samples/
+docs/        additional technical notes
+PLAN.md      goal, architecture, measured figures, phases — read before touching code
 ```
+
+## Two transports, by runtime
+
+| Where | How | Why |
+|---|---|---|
+| Ingestion (this Mac) | **Bolt driver**, `neo4j+s://…:7687` | batched parameterised writes, far faster for 348k relationships |
+| Worker (production) | **Query API**, `POST https://<db>.databases.neo4j.io/db/<name>/query/v2` | one `fetch()`, no driver or pooling in a short-lived isolate |
+
+Workers *can* open TCP sockets — HTTPS is chosen for simplicity, not forced by the platform.
 
 ## Conventions
 
-- Node/relationship names in Cypher follow the model defined in `PLAN.md` section 4 — don't invent new labels without updating the plan.
-- Ingestion is idempotent: running the script twice should not duplicate nodes (use `MERGE`, not `CREATE`, in Cypher).
-- The API never calls external services at request time — all data already lives in Neo4j. If an external data point is ever needed (e.g. a movie poster), that's explicitly Phase 5 and gets discussed before it's added.
-- Year/decade filters are always optional on endpoints — the graph must be navigable with no filters applied.
+- **Node and relationship names follow `PLAN.md`.** Don't invent labels without updating the plan.
+- **Ingestion is clear-and-reload, not incremental.** `MERGE` alone is not reconciliation — it
+  never removes stale edges when K drops or a source refreshes. Uniqueness constraints are global
+  and the tier has one database, so there is nowhere to stage: delete, reload, verify, mark ready.
+  Reloads are manual and rare, so the downtime is accepted.
+- **Create uniqueness constraints before loading**, not after — they are required for `MERGE`
+  correctness, not just speed.
+- **`SIMILAR_TO` is written low→high `movieId` and queried undirected.** Cosine is symmetric;
+  storing both directions wastes 16% of the relationship budget.
+- **`DIRECTED` and `ACTED_IN` point Person→Movie.** Movie-centred traversals must be undirected or
+  cast and directors silently vanish.
+- **Every neighbour query has a `LIMIT` and a `DISTINCT` on the candidate movie.** Average
+  `SIMILAR_TO` degree is ~17; a `genre` two-hop from one movie scans up to **25,956 paths yielding
+  15,087 distinct candidates** in the worst case (`movieId` 81132, ten genres) — a movie's genres
+  are unioned, so the largest single genre is not the bound. Two films can share several actors, so without `DISTINCT` the same movie
+  returns repeatedly and eats the limit.
+- **Parameterised Cypher only.** Never interpolate user input into a query string. `q` reaches a
+  Lucene-interpreting full-text index — escape it and clamp its length.
+- **The API never calls external services at request time.** All data is already in Neo4j.
+  Posters and synopsis are explicitly Phase 5 and get discussed before being added.
+- **Year and connection-type filters are always optional** — the graph must be navigable unfiltered.
+- **Verify source checksums** against `data/MANIFEST.md` before ingesting. Both datasets are
+  rolling releases; reproducibility only holds against pinned bytes.
+
+## Data
+
+Never commit the datasets — 3.3 GB, gitignored. What *is* committed and should stay current:
+
+- `data/MANIFEST.md` — full SHA-256 for all 12 source files
+- `data/METADATA.md` — every measured figure the plan relies on
+- `data/samples/` — 100-line samples of each input, so the repo is self-describing
+
+## Licensing
+
+MovieLens and IMDb are both **non-commercial use only**. This project cannot become a
+revenue-generating product on this data. Cite Harper & Konstan (2015) for MovieLens.
 
 ## How to run locally
 
-(To be filled in once `docker-compose.yml` exists — for now the repo only has the plan and folder structure. First real coding step: Phase 1 in PLAN.md, the ingestion script.)
+(To be filled in once ingestion exists. Requires `.env` with `NEO4J_URI`, `NEO4J_USERNAME`,
+`NEO4J_PASSWORD` — gitignored, never committed. The repo is public.)
 
 ## Status
 
-Just started. Phase 0 (setup) complete. Next step: Phase 1 — download the MovieLens ml-latest + IMDb non-commercial datasets and write the ingestion script in `ingestion/`. Update section 8 of `PLAN.md` as phases progress.
+Phase 0 complete. Plan hardened through a two-act grill and Codex adversarial review — see
+`PLAN-REVIEW-LOG.md`.
+
+**Blocked on one precondition:** AuraDB Free's real capacity. Neo4j's own sources conflict
+(200k/400k vs 50k/175k) and the design does not survive the lower figure — see the BLOCKING risk
+in `PLAN.md`. Ingestion must probe the live instance before anything is built.
