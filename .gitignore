@@ -1,0 +1,67 @@
+# --- secrets & credentials ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+id_rsa*
+id_ed25519*
+credentials*
+secrets*
+
+# --- VPS / deploy config (holds host, ports, neo4j auth) ---
+docker/.env
+docker/*.env
+docker/secrets/
+deploy/
+*.retry
+letsencrypt/
+certbot/
+nginx/ssl/
+
+# --- datasets: multi-GB, never commit ---
+ingestion/data/
+data/
+ml-latest*/
+ml-25m/
+title.*.tsv*
+name.basics.tsv*
+*.tsv.gz
+*.csv.gz
+*.zip
+
+# --- neo4j ---
+neo4j/data/
+neo4j/logs/
+neo4j/import/
+neo4j/plugins/
+*.dump
+
+# --- python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env.venv
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- node / frontend ---
+node_modules/
+dist/
+.vite/
+*.log
+npm-debug.log*
+
+# --- claude code: local-only settings ---
+.claude/settings.local.json
+
+# --- proprietary: Cronolix brand kit, unrelated to this project ---
+.claude/skills/cronolix-design/
+
+# --- os ---
+.DS_Store
+Thumbs.db
