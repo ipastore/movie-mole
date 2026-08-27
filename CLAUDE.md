@@ -113,3 +113,7 @@ capacity is 200k/400k (44% / 87% used) and the `movieSearch` index is `ONLINE` a
 Spanish search verified: "El Padrino" returns The Godfather.
 
 **Next: Phase 2** — the Cloudflare Worker, with the daily keep-alive Cron Trigger folded in.
+Its *behaviour* is specified and review-hardened, but six decisions are still open — see
+"Phase 2 — open decisions, to grill before building" in `PLAN.md`. Grill those first; the
+response JSON shape is a contract Phase 3 is written against, so it must not be left to the
+builder.

@@ -286,6 +286,33 @@ on every request. If routing proves impossible, the fallback is an explicit
 `Access-Control-Allow-Origin` naming **only** the Pages origin — never `*`, which would let any
 site drive the API against a free-tier budget — plus an `OPTIONS` handler.
 
+#### Phase 2 — open decisions, to grill before building
+
+The behaviour above is settled and survived six review rounds. What is **not** specified is the
+response contract and the Cloudflare mechanisms. These must be closed before `/codex-build`,
+because letting a builder invent them produces churn in Phase 3.
+
+1. **[OPEN] Response JSON shape — the important one.** Nothing in this plan says what
+   `/api/movie/2571` returns: field names, nesting, how per-type counts are expressed, how a
+   `SIMILAR_TO` score rides along on an `expand` result. This is a **contract between Phase 2 and
+   Phase 3**; the frontend is written against it. Decide it here, not in the builder.
+2. **[OPEN] Rate-limit mechanism.** "Per-IP request budget" is a requirement, not an
+   implementation. Cloudflare Rate Limiting rules, Worker-side counters in KV, or Durable
+   Objects — each with different free-tier limits and failure modes.
+3. **[OPEN] Cache mechanism and TTL.** "Edge cache with a bounded TTL" — `caches.default`, the
+   Cache API, or `fetch` cf options; and what TTL. The key must include the readiness generation
+   stamp (already decided), but the store is not chosen.
+4. **[OPEN] Readiness lookup strategy.** Cache keys need `sourceManifestHash` + `builtAt` from the
+   `Meta` node. Reading it per request adds a round-trip to every call; caching it needs its own
+   invalidation. Neither is specified.
+5. **[OPEN] Error response shape.** "Sanitised messages" is the rule; the JSON body of a 400/503
+   is undefined.
+6. **[OPEN] Project layout and tooling.** `wrangler.toml`, TypeScript config, test approach, and
+   the cron expression for the keep-alive merged in from Phase 4.
+
+Item 1 is a cross-phase contract. Items 2–6 are conventional and mainly need a decision recorded
+so they do not get re-litigated.
+
 ### Phase 3 — Frontend (Vite + Cytoscape.js, Cloudflare Pages)
 
 Search box, graph canvas, filter panel (year range, connection-type toggles mapping to `expand`'s
