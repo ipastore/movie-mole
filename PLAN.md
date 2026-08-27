@@ -296,7 +296,11 @@ when the database is **paused or not ready** rather than an empty graph; and pla
 `year = null` in an explicit **"Unknown year"** bucket at the end of the timeline rather than
 dropping them silently or coercing them to 0.
 
-### Phase 4 — Keep-alive
+### Phase 4 — Keep-alive — **merged into Phase 2**
+
+The Cron Trigger is a few lines of `wrangler.toml` beside the Worker, so it ships with the first
+deploy rather than two phases later. Keeping it separate would mean standing up an interim host
+for a week and then deleting it.
 
 Cloudflare Cron Trigger, **daily**, with retry and alert on failure.
 
@@ -373,7 +377,12 @@ must never be described as MovieLens ratings. **`ratings.csv` is not used at all
 - **[CLOSED]** Article normalisation on ingest, English allowlist, fixture-tested.
 - **[CLOSED]** Spanish search in the MVP.
 - **[MEASURED]** IMDb coverage — 16,330/16,376 directors, 15,600/16,376 cast.
-- **[BLOCKING PRECONDITION] The 200k/400k capacity profile is required, not assumed.**
+- **[PASSED 2026-08-27] Capacity confirmed empirically at 200k/400k.** A full load into a fresh
+  instance succeeded: **87,544 nodes / 348,080 relationships** — 44% and 87% of cap. The disputed
+  50k/175k figure does not apply to this tier, so the reduced-product branch is dead and cast,
+  director and Spanish navigation all ship. Original analysis retained below for the record.
+
+- **[SUPERSEDED — see above] The 200k/400k capacity profile is required, not assumed.**
   The Create Instance screen states **200k nodes / 400k relationships**; other Neo4j pages state
   **50k / 175k**. This plan is sized against the former: 87,544 nodes (44%), 348,080
   relationships (87%).
@@ -409,7 +418,11 @@ must never be described as MovieLens ratings. **`ratings.csv` is not used at all
 - **[RISK] 72h auto-pause is not recoverable by traffic.** A paused instance does not serve, so no
   client-side handling can wake it. Daily cron with alerting reduces the odds; it does not
   eliminate them.
-- **[BLOCKING] Storage and index headroom are unproven, and entity counts do not prove them.**
+- **[PASSED 2026-08-27] Storage and index headroom proven.** The `movieSearch` full-text index over
+  35,520 Spanish alias strings built to `state=ONLINE, populationPercent=100.0`. Verified live:
+  zero duplicate `SIMILAR_TO` pairs, zero unnamed `Person` nodes. Original concern below.
+
+- **[SUPERSEDED — see above] Storage and index headroom are unproven.**
   87,544 nodes and 348,080 relationships fit the *counters*, but `searchAliases` (35,520 strings)
   and its full-text index consume store bytes and RAM on a tier explicitly labelled "limited
   memory and vCPU". A graph that fits by count can still fail to fit on disk or fail to build its

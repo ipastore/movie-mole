@@ -107,6 +107,9 @@ Schedule the keepalive daily, well inside the 72h pause window:
 Phase 0 complete. Plan hardened through a two-act grill and Codex adversarial review — see
 `PLAN-REVIEW-LOG.md`.
 
-**Blocked on one precondition:** AuraDB Free's real capacity. Neo4j's own sources conflict
-(200k/400k vs 50k/175k) and the design does not survive the lower figure — see the BLOCKING risk
-in `PLAN.md`. Ingestion must probe the live instance before anything is built.
+**Phase 1 complete and live.** The graph is loaded into AuraDB Free instance `a2a3cb81`:
+87,544 nodes / 348,080 relationships, `Meta.ready = true`. Both blocking preconditions passed —
+capacity is 200k/400k (44% / 87% used) and the `movieSearch` index is `ONLINE` at 100%.
+Spanish search verified: "El Padrino" returns The Godfather.
+
+**Next: Phase 2** — the Cloudflare Worker, with the daily keep-alive Cron Trigger folded in.
