@@ -406,9 +406,10 @@ must never be described as MovieLens ratings. **`ratings.csv` is not used at all
   memory and vCPU". A graph that fits by count can still fail to fit on disk or fail to build its
   index. **Required before any destructive reload:** measured store growth per stage and confirmed
   `ONLINE` full-text index on the first (non-destructive) load, with a stated safety margin.
-- **[OPEN] Peak RSS of the similarity step** is unrecorded. Blocked 1024-row computation should
-  keep it near the 74 MB matrix plus one block (~140 MB), but that is asserted, not measured. This
-  is local-only and does not affect the database; record it during the first real run.
+- **[MEASURED] Peak RSS of the similarity step is ~366 MiB**, across three runs (328.9 / 362.5 /
+  366.0). The plan previously asserted ~140 MB — the 74 MB matrix plus one 1024-row block — which
+  was optimistic: it ignored the `pairs` dict holding 137,568 entries and NumPy's working
+  allocations. Local-only, no effect on the database, and comfortable on any development machine.
 
 ## Licensing
 

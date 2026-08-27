@@ -425,3 +425,80 @@ been multiplied.
 Two external preconditions remain by design, and the plan refuses to proceed without either:
 AuraDB Free's real capacity, and storage/full-text-index headroom. Both are answered by the first
 non-destructive ingestion into a fresh instance.
+
+---
+
+# Act 3 — Build
+
+Roles flip: Codex writes with full access (`--yolo`), Claude reviews the diff and runs the
+proof independently. Builder: gpt-5.6-luna, effort=max. Thread `01a03f7f`.
+Usage: 10,987,132 in / 61,889 out (39,418 reasoning).
+
+## Round 1 — Codex build
+
+Seven files in `ingestion/`, 1,026 lines: `pipeline.py` (555), `load.py` (362),
+`tests/test_pipeline.py` (73), `dry_run.py` (30), plus `requirements.txt`, `.env.example`,
+`__init__.py`. No live load attempted — no credentials exist yet, as specified.
+
+### Claude's verdict — accepted with one fix
+
+**Independent verification passed.** I ran the proof myself rather than trusting the report. All
+seven counts match the figures measured independently during Act 1:
+
+| | Act 1 (ad-hoc scripts) | Codex pipeline | Claude's re-run |
+|---|---|---|---|
+| Movie | 16,376 | 16,376 | 16,376 |
+| Person | 71,148 | 71,148 | 71,148 |
+| Genre | 19 | 19 | 19 |
+| ACTED_IN | 156,759 | 156,759 | 156,759 |
+| DIRECTED | 18,536 | 18,536 | 18,536 |
+| HAS_GENRE | 35,217 | 35,217 | 35,217 |
+| SIMILAR_TO (K=10) | 137,568 | 137,568 | 137,568 |
+
+Three independent derivations agreeing on seven figures is genuine mutual validation, not a
+self-confirming loop. Peak RSS 328.9 MiB — the plan's ~140 MB estimate was optimistic and is now
+corrected by measurement.
+
+**Every invariant from the six review rounds is implemented faithfully:**
+
+- `load.py:126` — the duplicate-pair check uses a **directed** `-[:SIMILAR_TO]->`, the round-3 fix
+  for an invariant that could never pass undirected
+- `load.py:98` — the lock is claimed conditionally with `WHERE x.lockedBy IS NULL` (round 6)
+- `load.py:24` — the full-text index is named `movieSearch` (round 6), with a
+  `SHOW FULLTEXT INDEXES` state gate (round 4)
+- The `Meta` delete preserves the readiness node via `WHERE n.key <> $readiness`, and there is no
+  blanket `MATCH (n) DETACH DELETE n` — deletion is per-owned-label and batched
+- The ownership assertion compares total node count against the sum of owned labels, as specified
+
+**Better than specified in one respect:** the movie set is derived from `genome-scores.csv` rather
+than read from `data/derived/genome_movie_ids.txt`, which is gitignored. A fresh clone therefore
+works. My own Act 1 scripts had baked in that dependency.
+
+**One real defect, found by reviewing rather than by the tests:**
+
+    movieId 171749  'Death Note: Desu noto (2006-2007)'   <- a year RANGE
+      spec rule (parenthesised)     -> None
+      YEAR_RE = r"(\d{4})"          -> 2007
+      resulting title               -> 'Death Note: Desu noto (2006-)'   CORRUPTED
+
+The regex omitted the parentheses `PLAN.md` requires, so it stripped `2007` from *inside* the
+parenthetical. One title of 16,376. The suite tested `"Film 2001 (director's cut) (1995)"` but no
+year-*range* case — precisely the gap. Counts were unaffected, which is why the proof passed.
+
+**Two minor:** `GENOME_MOVIE_IDS_PATH` and `GENOME_IMDB_TCONSTS_PATH` were defined and never used.
+And Codex self-reported that `nm17757980` appears in `title.principals` but not `name.basics`,
+giving it an `Unknown (nm17757980)` placeholder — **judged correct**, since the 71,148 figure counts
+distinct nconsts from principals+crew, not from `name.basics`, so the placeholder is what preserves
+the measurement. Worth a UI note later.
+
+### Fix round — Claude direct, not delegated
+
+The fix is a regex requiring parentheses plus one fixture. The skill warns that ping-ponging
+trivia through delegation burns more than it saves, and a ~13-minute Codex round at `effort=max`
+for a two-character regex change is exactly that. Applied directly:
+
+1. `YEAR_RE` → `r"\((\d{4})\)"`
+2. `test_year_requires_parentheses` regression fixture, documenting movieId 171749 by name
+3. Two dead constants removed
+
+21 tests pass. Full dry run re-verified to confirm no count moved.
