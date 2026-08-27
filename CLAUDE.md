@@ -83,8 +83,24 @@ revenue-generating product on this data. Cite Harper & Konstan (2015) for MovieL
 
 ## How to run locally
 
-(To be filled in once ingestion exists. Requires `.env` with `NEO4J_URI`, `NEO4J_USERNAME`,
-`NEO4J_PASSWORD` — gitignored, never committed. The repo is public.)
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r ingestion/requirements.txt
+cp ingestion/.env.example ingestion/.env      # then fill in real values
+.venv/bin/python -m pytest ingestion/tests -q # 21 fixture tests, no DB needed
+.venv/bin/python -m ingestion.dry_run         # streams 3.3 GB, emits the expected-count manifest
+.venv/bin/python -m ingestion.load            # the real load — needs credentials
+.venv/bin/python -m ingestion.keepalive       # write-ping so the Free instance never pauses
+```
+
+`ingestion/.env` is gitignored and must stay that way — **the repo is public**. `NEO4J_URI` uses
+the Aura **database ID**, not the instance display name: `neo4j+s://<dbid>.databases.neo4j.io`.
+Copy it from the instance's Connection URI in the console.
+
+Schedule the keepalive daily, well inside the 72h pause window:
+
+```
+0 4 * * *  cd /path/to/movie_mole && .venv/bin/python -m ingestion.keepalive >> /tmp/mm-keepalive.log 2>&1
+```
 
 ## Status
 

@@ -298,7 +298,16 @@ dropping them silently or coercing them to 0.
 
 ### Phase 4 — Keep-alive
 
-Cloudflare Cron Trigger, **daily**, with retry and alert on failure. A 48-hour interval against a
+Cloudflare Cron Trigger, **daily**, with retry and alert on failure.
+
+**Implemented ahead of Phase 4 as `ingestion/keepalive.py`** so the instance is protected from the
+moment it exists, rather than only once the Worker ships. It performs a **write**
+(`SET x.lastPingAt = datetime()` on the existing `(:Meta {key:'readiness'})` node) rather than a
+read: a write is unambiguously activity, whereas whether a read resets Aura's inactivity timer is
+not documented. Reusing the readiness node means **no extra nodes**, so the ownership assertion and
+the expected-count verification are untouched. Exits non-zero on failure so cron alerts rather than
+failing silently for 72 hours. The Cloudflare Cron Trigger replaces the local crontab in Phase 4;
+the query is the same. A 48-hour interval against a
 72-hour pause window leaves no margin for one missed run, and **a paused instance cannot be woken
 by a query** — the hostname does not serve. No client-side handling can recover from this; it
 requires an operator resume or a paid tier.
